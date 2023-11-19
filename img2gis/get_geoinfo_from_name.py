@@ -1,34 +1,18 @@
-import numpy as np
+# import numpy as np
 import cv2
 import os
-import shutil
-import tqdm
-import sys
+# import shutil
+# import tqdm
+# import sys
 import argparse
-import random
+# import random
 
-import math
-import pandas as pd
+# import math
+# import pandas as pd
 import geopandas
 from shapely.geometry import Polygon
 import matplotlib.pyplot as plt
-
-
-#SBATCH --partition=deeplearn
-#SBATCH --qos=gpgpudeeplearn
-
-#SBATCH --partition=feit-gpu-a100
-#SBATCH --qos=feit
-
-def num2deg(xtile, ytile, zoom):
-    # 
-    # tiles number to lat & lon
-    # 
-    n = 2.0 ** zoom
-    lon_deg = xtile / n * 360.0 - 180.0
-    lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
-    lat_deg = math.degrees(lat_rad)
-    return (lat_deg, lon_deg)
+# import utils
 
 
 def geoinfo_to_mask(datapath, maskpath, labelpath):
@@ -56,13 +40,10 @@ def geoinfo_to_mask(datapath, maskpath, labelpath):
         zoom = int(zoom.split('.')[0])
         
         next_tile_lat, next_tile_lon = num2deg(x_tile+1, y_tile+1, zoom)
-        # offset_lat = 0.000021
-        # offset_lon = 0.000008 # + left - right
-        
+
         dif_lat = abs(next_tile_lat - lat)
         dif_lon = abs(next_tile_lon - lon)
-        # offset_lat = 0.00.14
-        # offset_lon = 0.00.02
+        
         offset_lat = 0.13 * dif_lat # + bottom - top
         offset_lon = 0.03 * dif_lon # + left - right
         min_x = min(lon, next_tile_lon) + offset_lon
@@ -103,30 +84,6 @@ def overlap_img_out(datapath, labelpath, savepath):
         overlapping = cv2.addWeighted(img, 1, mask, 0.3, 0)
         cv2.imwrite(savepath + '/' + img_name.replace('out_', ''), overlapping)
     print('finish')
-
-def divide_data(dataset_path, new_path, rate):
-    # dirs = os.listdir(dataset_path)
-    print('create new directories......')
-    if not os.path.exists(new_path+'/train'):
-        os.mkdir(new_path+'/train')
-    if not os.path.exists(new_path+'/val'):
-        os.mkdir(new_path+'/val')
-    # for dir_name in dirs:
-    files  = os.listdir(dataset_path)
-    train_size = int(rate * len(files))
-    test_size = len(files) - train_size
-    print('size of training_set:', train_size)
-    print('size of test_set:', test_size)
-    train_set = random.sample(files, train_size)
-    test_set = []
-    for data in files:
-        if data not in train_set:
-            test_set.append(data)
-    # print(dataset_path+'/'+dir_name)
-    copy_file(dataset_path, train_set, new_path+'/train/')
-    copy_file(dataset_path, test_set, new_path+'/val/')
-    # print(dir_name,'category: train_size=', len(train_set), 'val_size=', len(test_set))
-    # break
 
 
 if __name__ == '__main__':

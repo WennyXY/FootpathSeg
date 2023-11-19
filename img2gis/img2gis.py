@@ -9,57 +9,18 @@ import argparse
 from get_geoinfo_from_name import num2deg
 from tile2net_utils.geodata_utils import *
 from tile2net_utils.topology import *
+import utils
 
 
-def get_info_from_name(img_name):
-    lon_lat, coordinates, _, zoom  = img_name.split('~')
-    lon, lat = lon_lat.split(',')
-    lon = float(lon)
-    lat = float(lat)
-    x_tile, y_tile = coordinates.split(',')
-    zoom = int(zoom.split('.')[0])
-    
-    next_tile_lat, next_tile_lon = num2deg(int(x_tile)+1, int(y_tile)+1, zoom)
-    
-    min_x = min(lon, next_tile_lon)
-    min_y = min(lat, next_tile_lat)
-    max_x = max(lon, next_tile_lon)
-    max_y = max(lat, next_tile_lat)
-    return lon, lat, next_tile_lon, next_tile_lat
-
-def img_coord2lat_lon(img_name, width, height, coord_list):
-    lon, lat, next_tile_lon, next_tile_lat = get_info_from_name(img_name)
-    lon_dist = next_tile_lon - lon
-    lat_dist = next_tile_lat - lat
-    new_list = []
-    for polygon in coord_list:
-        points = []
-        for point in polygon:
-            # print(point)
-            p_lat = point[0][1] * lat_dist / width
-            p_lon = point[0][0] * lon_dist / height
-            points.append((lon+p_lon, lat+p_lat))
-        if len(points) > 0:
-            new_list.append(points)
-    
-    return new_list
-
-def filter_contours(contours):
-    new_contours = []
-    print(contours)
-    return new_contours
-
-
-
-# input: imgs, output path
-# save a geojson file
 def img2gis(img_path, output_path, data_path= None, gdf_file=None, create_line=True, tolerance=10, min_area=10):
-    # imgs.remove('.DS_Store')
+    # 
+    # input: imgs, output path
+    # save a geojson file
+    # 
     if gdf_file:
         print('..... load gdf file')
         gdf = geopandas.read_file(gdf_file)
         gdf = gdf.to_crs(crs = 4326)
-        
     else:
         print('..... from masks to gdf')
         if data_path:
@@ -80,7 +41,7 @@ def img2gis(img_path, output_path, data_path= None, gdf_file=None, create_line=T
             gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
             ret, binary = cv2.threshold(gray,127,255,cv2.THRESH_BINARY)
             contours, hierarchy = cv2.findContours(binary, cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
-            polygon_tmp = img_coord2lat_lon(img_name, width, height, contours)
+            polygon_tmp = utils.img_coord2lat_lon(img_name, width, height, contours)
             # break
             for poly in polygon_tmp:
                 if len(poly) > 3:
@@ -89,14 +50,9 @@ def img2gis(img_path, output_path, data_path= None, gdf_file=None, create_line=T
 
     
     # get the union parts
-    print('..... get the intersection polygons')
-    boundary_filepath = '/data/gpfs/projects/punim1671/xinye/experiments/bikenetwork/CityOfMelbourne_municipal-boundary.geojson'
-    boundary = geopandas.read_file(boundary_filepath)
-    g_list = [geom for geom in gdf['geometry'] if geom.intersects(boundary['geometry']).bool()]
-    gdf = geopandas.GeoDataFrame(geometry=g_list, crs="EPSG:4326")
     gdf = gdf.to_crs(crs=3857)
     
-    # preprocess following tile2net
+    # preprocess refer to tile2net
     gdf = preprocess_pdf(gdf, 3857, min_area)
     gdf.to_file(output_path+'_simplify_filter.geojson', driver='GeoJSON')
     print('simplified GIS file saved')
@@ -113,27 +69,8 @@ def img2gis(img_path, output_path, data_path= None, gdf_file=None, create_line=T
         uni_lines = modif_uni_met.explode(index_parts=True)
         uni_lines.reset_index(drop=True, inplace=True)
         uni_lines.dropna(inplace=True)
-        uni_line2 = uni_lines.copy()
-
-        # try:
-        #     cl1 = clean_deadend_dangles(uni_line2)
-        #     extended = extend_lines(cl1, tolerance=tolerance, extension=0)
-
-        #     cleaned = remove_false_nodes(extended)
-        #     cleaned.reset_index(drop=True, inplace=True)
-            
-        #     cleaned = set_gdf_crs(cleaned, 3857)
-        #     # cleaned.geometry = cleaned.geometry.set_crs(3857)
-
-        #     centerline_network = cleaned
-        # except:
-        #     print('no clean')
-        #     centerline_network = uni_lines
-        centerline_network = uni_lines
-        # print('..... connecting the centerlines')
-        # connect lines
-        # centerline_network = connect_lines(centerline_network)
         
+        centerline_network = uni_lines
         centerline_network = change_crs(centerline_network, 4326)
         
         print('..... saving the centerlines')
